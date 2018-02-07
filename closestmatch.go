@@ -153,14 +153,19 @@ func (cm *ClosestMatch) Closest(searchWord string) string {
 	return ""
 }
 
+type Match struct {
+	Data  interface{}
+	Score int
+}
+
 // ClosestN searches for the `searchWord` and returns the n closests matches
-func (cm *ClosestMatch) ClosestN(searchWord string, max int) []interface{} {
-	matches := make([]interface{}, 0, max)
+func (cm *ClosestMatch) ClosestN(searchWord string, max int) []Match {
+	matches := make([]Match, 0, max)
 	for i, pair := range rankByWordCount(cm.match(searchWord)) {
 		if i >= max {
 			break
 		}
-		matches = append(matches, pair.Data)
+		matches = append(matches, Match{Data: pair.Data, Score: pair.Value})
 	}
 	return matches
 }
