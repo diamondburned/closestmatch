@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+const letters = "abcdefghijklmnopqrstuvwxyzöäüß"
+
 // ClosestMatch is the structure that contains the
 // substring sizes and carrys a map of the substrings for
 // easy lookup
@@ -112,7 +114,7 @@ type result struct {
 }
 
 func (cm *ClosestMatch) match(searchWord string) map[string]workerResult {
-	searchSubstrings := cm.splitWord(searchWord)
+	searchSubstrings := cm.splitWord(strings.ToLower(searchWord))
 	searchSubstringsLen := len(searchSubstrings)
 
 	jobs := make(chan job, searchSubstringsLen)
@@ -196,10 +198,10 @@ func (p PairList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 func (cm *ClosestMatch) splitWord(word string) map[string]struct{} {
 	wordHash := make(map[string]struct{})
 	for _, j := range cm.SubstringSizes {
-		for i := 0; i < len(word)-j+1; i++ {
-			substring := string(word[i : i+j])
+		for i := 0; i < len([]rune(word))-j+1; i++ {
+			substring := string([]rune(word)[i : i+j])
 			if len(strings.TrimSpace(substring)) > 0 {
-				wordHash[string(word[i:i+j])] = struct{}{}
+				wordHash[string([]rune(word)[i:i+j])] = struct{}{}
 			}
 		}
 	}
@@ -267,7 +269,6 @@ func (cm *ClosestMatch) AccuracyMutatingWords() float64 {
 				}
 			}
 			testString = strings.Join(words, " ")
-			letters := "abcdefghijklmnopqrstuvwxyz"
 			if len(testString) == 0 {
 				continue
 			}
@@ -310,8 +311,6 @@ func (cm *ClosestMatch) AccuracyMutatingLetters() float64 {
 		}
 		testString = originalTestString
 
-		// letters to replace with
-		letters := "abcdefghijklmnopqrstuvwxyz"
 
 		choice := rand.Intn(3)
 		if choice == 0 {
