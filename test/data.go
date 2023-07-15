@@ -109,37 +109,35 @@ Red Riding Hood by Sarah Blakley-Cartwright
 The Kingdom of This World by Alejo Carpentier
 Hitty, Her First Hundred Years by Rachel Field`
 
-var WordsToTest map[string]interface{}
-var BooksToTest map[string]interface{}
+var WordsToTest map[string]struct{ Words string }
+var BooksToTest map[string]Book
 
 var SearchWords = []string{"cervantes don quixote", "mysterious afur at styles by christie", "hard times by charles dickens", "complete william shakespeare", "War by HG Wells"}
 
 func init() {
-
-	WordsToTest = make(map[string]interface{})
+	WordsToTest = make(map[string]struct{ Words string })
 	for _, v := range SearchWords {
-		WordsToTest[v] = map[string]string{"words": v}
+		WordsToTest[v] = struct{ Words string }{v}
 	}
-	// for i := range SearchWords {
-	// 	SearchWords[i] = strings.ToLower(SearchWords[i])
-	// }
 
 	BooksToTest = GetBooks(Books)
-	// for i := range SearchWords {
-	// 	SearchWords[i] = strings.ToLower(SearchWords[i])
-	// }
 }
 
-func GetBooks(text string) map[string]interface{} {
+type Book struct {
+	Author string
+	Name   string
+}
+
+func GetBooks(text string) map[string]Book {
 	booksLines := strings.Split(strings.ToLower(text), "\n")
-	books := make(map[string]interface{})
+	books := make(map[string]Book)
 	for _, v := range booksLines {
 		pair := strings.Split(v, " by ")
 		author := "unknown"
 		if len(pair) == 2 {
 			author = pair[1]
 		}
-		books[v] = map[string]string{"author": author, "name": v}
+		books[v] = Book{author, v}
 	}
 	return books
 }

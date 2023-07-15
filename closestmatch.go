@@ -14,29 +14,29 @@ const letters = "abcdefghijklmnopqrstuvwxyzöäüß"
 // ClosestMatch is the structure that contains the
 // substring sizes and carrys a map of the substrings for
 // easy lookup
-type ClosestMatch struct {
+type ClosestMatch[Data any] struct {
 	SubstringSizes []int
 	SubstringToID  map[string]map[uint32]struct{}
-	ID             map[uint32]IDInfo
+	ID             map[uint32]IDInfo[Data]
 }
 
 // IDInfo carries the information about the keys
-type IDInfo struct {
+type IDInfo[Data any] struct {
 	Key           string
 	NumSubstrings int
-	Data          interface{}
+	Data          Data
 }
 
 // New returns a new structure for performing closest matches
-func New(possible map[string]interface{}, subsetSize []int) *ClosestMatch {
-	cm := new(ClosestMatch)
+func New[Data any](possible map[string]Data, subsetSize []int) *ClosestMatch[Data] {
+	cm := new(ClosestMatch[Data])
 	cm.SubstringSizes = subsetSize
 	cm.SubstringToID = make(map[string]map[uint32]struct{})
-	cm.ID = make(map[uint32]IDInfo)
+	cm.ID = make(map[uint32]IDInfo[Data])
 	i := 0
 	for k, m := range possible {
 		substrings := cm.splitWord(strings.ToLower(k))
-		cm.ID[uint32(i)] = IDInfo{Key: k, NumSubstrings: len(substrings), Data: m}
+		cm.ID[uint32(i)] = IDInfo[Data]{Key: k, NumSubstrings: len(substrings), Data: m}
 		for substring := range substrings {
 			if _, ok := cm.SubstringToID[substring]; !ok {
 				cm.SubstringToID[substring] = make(map[uint32]struct{})
@@ -50,8 +50,8 @@ func New(possible map[string]interface{}, subsetSize []int) *ClosestMatch {
 }
 
 // Load can load a previously saved ClosestMatch object from disk
-func Load(filename string) (*ClosestMatch, error) {
-	cm := new(ClosestMatch)
+func Load[Data any](filename string) (*ClosestMatch[Data], error) {
+	cm := new(ClosestMatch[Data])
 
 	f, err := os.Open(filename)
 	defer f.Close()
@@ -69,7 +69,7 @@ func Load(filename string) (*ClosestMatch, error) {
 }
 
 // Save writes the current ClosestSave object as a gzipped JSON file
-func (cm *ClosestMatch) Save(filename string) error {
+func (cm *ClosestMatch[Data]) Save(filename string) error {
 	f, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -82,26 +82,26 @@ func (cm *ClosestMatch) Save(filename string) error {
 	return enc.Encode(cm)
 }
 
-type workerResult struct {
+type workerResult[Data any] struct {
 	Value int
-	Data  interface{}
+	Data  Data
 }
 
-func (cm *ClosestMatch) worker(id int, jobs <-chan job, results chan<- result) {
+func (cm *ClosestMatch[Data]) worker(id int, jobs <-chan job, results chan<- result[Data]) {
 	for j := range jobs {
-		m := make(map[string]workerResult)
+		m := make(map[string]workerResult[Data])
 		if ids, ok := cm.SubstringToID[j.substring]; ok {
 			weight := 1000 / len(ids)
 			for id := range ids {
 				if _, ok2 := m[cm.ID[id].Key]; !ok2 {
-					m[cm.ID[id].Key] = workerResult{Value: 0, Data: cm.ID[id].Data}
+					m[cm.ID[id].Key] = workerResult[Data]{Value: 0, Data: cm.ID[id].Data}
 				}
 				item := m[cm.ID[id].Key]
 				item.Value += 1 + 1000/len(cm.ID[id].Key) + weight
 				m[cm.ID[id].Key] = item
 			}
 		}
-		results <- result{m: m}
+		results <- result[Data]{m: m}
 	}
 }
 
@@ -109,16 +109,16 @@ type job struct {
 	substring string
 }
 
-type result struct {
-	m map[string]workerResult
+type result[Data any] struct {
+	m map[string]workerResult[Data]
 }
 
-func (cm *ClosestMatch) match(searchWord string) map[string]workerResult {
+func (cm *ClosestMatch[Data]) match(searchWord string) map[string]workerResult[Data] {
 	searchSubstrings := cm.splitWord(strings.ToLower(searchWord))
 	searchSubstringsLen := len(searchSubstrings)
 
 	jobs := make(chan job, searchSubstringsLen)
-	results := make(chan result, searchSubstringsLen)
+	results := make(chan result[Data], searchSubstringsLen)
 	workers := 8
 
 	for w := 1; w <= workers; w++ {
@@ -130,7 +130,7 @@ func (cm *ClosestMatch) match(searchWord string) map[string]workerResult {
 	}
 	close(jobs)
 
-	m := make(map[string]workerResult)
+	m := make(map[string]workerResult[Data])
 	for a := 1; a <= searchSubstringsLen; a++ {
 		r := <-results
 		for key := range r.m {
@@ -148,54 +148,53 @@ func (cm *ClosestMatch) match(searchWord string) map[string]workerResult {
 }
 
 // Closest searches for the `searchWord` and returns the closest match
-func (cm *ClosestMatch) Closest(searchWord string) string {
-	for _, pair := range rankByWordCount(cm.match(searchWord)) {
+func (cm *ClosestMatch[Data]) Closest(searchWord string) string {
+	for _, pair := range rankByWordCount[Data](cm.match(searchWord)) {
 		return pair.Key
 	}
 	return ""
 }
 
-type Match struct {
-	Data  interface{}
-	Score int
-}
-
 // ClosestN searches for the `searchWord` and returns the n closests matches
-func (cm *ClosestMatch) ClosestN(searchWord string, max int) []Match {
-	matches := make([]Match, 0, max)
-	for i, pair := range rankByWordCount(cm.match(searchWord)) {
-		if i >= max {
-			break
-		}
-		matches = append(matches, Match{Data: pair.Data, Score: pair.Value})
+func (cm *ClosestMatch[Data]) ClosestN(searchWord string, max int) []Match[Data] {
+	matched := rankByWordCount[Data](cm.match(searchWord))
+	if len(matched) < max {
+		max = len(matched)
 	}
-	return matches
+	return matched[:max]
 }
 
-func rankByWordCount(wordFrequencies map[string]workerResult) PairList {
-	pl := make(PairList, len(wordFrequencies))
+func rankByWordCount[Data any](wordFrequencies map[string]workerResult[Data]) MatchList[Data] {
+	pl := make(MatchList[Data], len(wordFrequencies))
 	i := 0
 	for k, v := range wordFrequencies {
-		pl[i] = Pair{k, v.Value, v.Data}
+		pl[i] = Match[Data]{
+			Key:   k,
+			Data:  v.Data,
+			Value: v.Value,
+		}
 		i++
 	}
 	sort.Sort(sort.Reverse(pl))
 	return pl
 }
 
-type Pair struct {
-	Key   string
-	Value int
-	Data  interface{}
+// Match is a struct that contains the matched string, the data associated with
+// the matched string and the score.
+type Match[Data any] struct {
+	Key   string // matched string
+	Data  Data   // data associated with the matched string
+	Value int    // score
 }
 
-type PairList []Pair
+// MatchList is a list of Match structs. It implements the sort interface.
+type MatchList[Data any] []Match[Data]
 
-func (p PairList) Len() int           { return len(p) }
-func (p PairList) Less(i, j int) bool { return p[i].Value < p[j].Value }
-func (p PairList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+func (p MatchList[Data]) Len() int           { return len(p) }
+func (p MatchList[Data]) Less(i, j int) bool { return p[i].Value < p[j].Value }
+func (p MatchList[Data]) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
-func (cm *ClosestMatch) splitWord(word string) map[string]struct{} {
+func (cm *ClosestMatch[Data]) splitWord(word string) map[string]struct{} {
 	wordHash := make(map[string]struct{})
 	for _, j := range cm.SubstringSizes {
 		for i := 0; i < len([]rune(word))-j+1; i++ {
@@ -214,7 +213,7 @@ func (cm *ClosestMatch) splitWord(word string) map[string]struct{} {
 // AccuracyMutatingWords runs some basic tests against the wordlist to
 // see how accurate this bag-of-characters method is against
 // the target dataset
-func (cm *ClosestMatch) AccuracyMutatingWords() float64 {
+func (cm *ClosestMatch[Data]) AccuracyMutatingWords() float64 {
 	rand.Seed(1)
 	percentCorrect := 0.0
 	numTrials := 0.0
@@ -291,7 +290,7 @@ func (cm *ClosestMatch) AccuracyMutatingWords() float64 {
 // AccuracyMutatingLetters runs some basic tests against the wordlist to
 // see how accurate this bag-of-characters method is against
 // the target dataset when mutating individual letters (adding, removing, changing)
-func (cm *ClosestMatch) AccuracyMutatingLetters() float64 {
+func (cm *ClosestMatch[Data]) AccuracyMutatingLetters() float64 {
 	rand.Seed(1)
 	percentCorrect := 0.0
 	numTrials := 0.0
@@ -310,7 +309,6 @@ func (cm *ClosestMatch) AccuracyMutatingLetters() float64 {
 			break
 		}
 		testString = originalTestString
-
 
 		choice := rand.Intn(3)
 		if choice == 0 {

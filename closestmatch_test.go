@@ -3,6 +3,7 @@ package closestmatch
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
@@ -64,7 +65,7 @@ func BenchmarkFileLoad(b *testing.B) {
 	cm.Save("test/books.list.cm.gz")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		Load("test/books.list.cm.gz")
+		Load[struct{}]("test/books.list.cm.gz")
 	}
 }
 
@@ -121,7 +122,7 @@ func ExampleMatchingN() {
 	results := cm.ClosestN("war h.g. wells", 3)
 	var slice []string
 	for _, v := range results {
-		slice = append(slice, v.(map[string]string)["name"])
+		slice = append(slice, v.Data.Name)
 	}
 	fmt.Println(slice)
 	// Output:
@@ -145,7 +146,7 @@ func ExampleMatchingCatcher() {
 	searchWord := "catcher in the rye by jd salinger"
 	for i, match := range cm.ClosestN(searchWord, 3) {
 		if i == 2 {
-			fmt.Println(match.(map[string]string)["name"])
+			fmt.Println(match.Data.Name)
 		}
 	}
 	// Output:
@@ -159,7 +160,7 @@ func ExampleMatchingPotter() {
 	searchWord := "harry potter and the half blood prince by j.k. rowling"
 	for i, match := range cm.ClosestN(searchWord, 3) {
 		if i == 1 {
-			fmt.Println(match.(map[string]string)["name"])
+			fmt.Println(match.Key)
 		}
 	}
 	// Output:
@@ -198,7 +199,7 @@ func TestSaveLoad(t *testing.T) {
 	bText, _ := ioutil.ReadFile("test/books.list")
 	books := test.GetBooks(string(bText))
 	type TestStruct struct {
-		cm *ClosestMatch
+		cm *ClosestMatch[test.Book]
 	}
 	tst := new(TestStruct)
 	tst.cm = New(books, []int{5})
@@ -206,9 +207,12 @@ func TestSaveLoad(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	t.Cleanup(func() {
+		os.Remove("test.gob")
+	})
 
 	tst2 := new(TestStruct)
-	tst2.cm, err = Load("test.gob")
+	tst2.cm, err = Load[test.Book]("test.gob")
 	if err != nil {
 		t.Error(err)
 	}
