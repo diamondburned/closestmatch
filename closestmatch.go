@@ -147,6 +147,11 @@ func (cm *ClosestMatch[Data]) match(searchWord string) map[string]workerResult[D
 	return m
 }
 
+// MatchAll searches for the `searchWord` and returns all matches.
+func (cm *ClosestMatch[Data]) MatchAll(searchWord string) []Match[Data] {
+	return rankByWordCount[Data](cm.match(searchWord))
+}
+
 // Closest searches for the `searchWord` and returns the closest match
 func (cm *ClosestMatch[Data]) Closest(searchWord string) string {
 	for _, pair := range rankByWordCount[Data](cm.match(searchWord)) {
@@ -162,6 +167,18 @@ func (cm *ClosestMatch[Data]) ClosestN(searchWord string, max int) []Match[Data]
 		max = len(matched)
 	}
 	return matched[:max]
+}
+
+// ClosestValue searches for the `searchWord` and returns the closest match
+// with the value or less.
+func (cm *ClosestMatch[Data]) ClosestValue(searchWord string, value int) []Match[Data] {
+	matched := rankByWordCount[Data](cm.match(searchWord))
+	for i, match := range matched {
+		if match.Value > value {
+			return matched[:i]
+		}
+	}
+	return matched
 }
 
 func rankByWordCount[Data any](wordFrequencies map[string]workerResult[Data]) MatchList[Data] {
