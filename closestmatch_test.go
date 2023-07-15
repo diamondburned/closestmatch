@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yugloocamai/closestmatch/test"
+	"libdb.so/closestmatch/test"
 )
 
 func BenchmarkNew(b *testing.B) {
